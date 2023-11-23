@@ -3,11 +3,54 @@ const prisma = new PrismaClient;
 const slugify = require('slugify');
 
 // function rotte
-async function index(req,res){
-    const postsList= await prisma.post.findMany();
-    res.json(postsList);
-}
 
+async function index(req, res, next) {
+    try {
+      const where = {};
+      const { page = 1, limit = 10, published, search } = req.query;
+  
+      // Filtro per post pubblicati
+      if (published) {
+        where.published = published === "true";
+      }
+  
+      // Filtro per ricerca nel titolo o nel contenuto
+      if (search) {
+        where.OR = [
+          { title: { contains: search} },
+          { content: { contains: search} },
+        ];
+      }
+  
+      // Query per ottenere il numero totale di post
+      const totalItems = await prisma.post.count({ where });
+  
+      // Calcola il numero totale di pagine disponibili
+      const totalPages = Math.ceil(totalItems / limit);
+  
+      // Calcola l'offset in base alla pagina e al limite
+      const offset = (page - 1) * limit;
+  
+      // Recupera i post in base ai filtri
+      const posts = await prisma.post.findMany({
+        where,
+        take: parseInt(limit),
+        skip: offset,
+      });
+  
+      res.json({
+        posts,
+        totalPages,
+        currentPage: parseInt(page),
+        totalItems,
+      });
+    } catch (error) {
+      // Gestisci gli errori in modo adeguato
+      next(error);
+    }
+  }
+  
+  
 
 async function show(req, res) {
   // Estraggo lo slug dai parametri della richiesta
@@ -43,7 +86,7 @@ async function store(req, res) {
       content: req.body.content,
       published: req.body.published,
     },
-    skipDuplicates: true,
+    // skipDuplicates: true,
   });
 
   // Ritorno il nuovo post come risposta JSON
